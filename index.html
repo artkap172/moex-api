@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>MOEX Realtime Фьючерсы</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f9f9fb; }
+    #main-table { margin: 40px auto 0; width: 95vw; max-width: 1200px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
+    th, td { padding: 6px 10px; border: 1px solid #ccc; }
+    th { background: #57aaff; color: #fff; position: sticky; top: 0; }
+    tr.active { background: #e8fff3; }
+  </style>
+</head>
+<body>
+  <h2 style="text-align:center;margin-top:30px;">MOEX Фьючерсы - данные из <span style="color:#57aaff">backend</span></h2>
+
+  <div id="main-table">Загрузка...</div>
+
+  <script>
+    const BACKEND_URL = 'https://moex-api-5kg3.onrender.com/api/moex'; // ваш backend
+
+    async function fetchMOEXData() {
+      try {
+        document.getElementById('main-table').textContent = 'Загрузка...';
+        const resp = await fetch(BACKEND_URL);
+        if (!resp.ok) throw new Error('Ошибка загрузки');
+        const data = await resp.json();
+        displayMOEXData(data);
+      } catch (e) {
+        document.getElementById('main-table').innerHTML = 'Ошибка загрузки данных: ' + e;
+      }
+    }
+
+    // Этот парсер работает для актуального ответа MOEX ISS API
+    function displayMOEXData(apiResponse) {
+      if (!apiResponse || !apiResponse.securities) {
+        document.getElementById('main-table').innerHTML = '<b>Нет раздела securities в ответе</b>';
+        return;
+      }
+      const sec = apiResponse.securities;
+      const columns = sec.columns;
+      const rows = sec.data;
+      const instruments = rows.map(row => {
+        const obj = {};
+        columns.forEach((col, idx) => obj[col] = row[idx]);
+        return obj;
+      });
+
+      const today = new Date();
+      // Оставляем только фьючерсы, у которых дата экспирации >= сегодня
+      const active = instruments.filter(inst => {
+        if (!inst.LASTTRADEDATE) return false;
+        try {
+          const exp = new Date(inst.LASTTRADEDATE);
+          return exp >= today;
+        } catch {
+          return false;
+        }
+      });
+
+      let html = '<table>';
+      html += '<tr><th>Код</th><th>Название</th><th>Цена</th><th>Экспирация</th></tr>';
+      for (const inst of active) {
+        html += `<tr class="active">`;
+        html += `<td>${inst.SECID}</td><td>${inst.SECNAME}</td><td>${inst.PREVSETTLEPRICE || '-'}</td><td>${inst.LASTTRADEDATE}</td>`;
+        html += '</tr>';
+      }
+      html += '</table>';
+      document.getElementById('main-table').innerHTML = html;
+    }
+
+    fetchMOEXData();
+    setInterval(fetchMOEXData, 30000);
+  </script>
+</body>
+</html>
